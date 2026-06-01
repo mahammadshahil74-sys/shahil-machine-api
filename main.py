@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from enum import Enum
 
@@ -6,6 +7,15 @@ app = FastAPI(
     title="Shahil_Machine_Fault_API",
     description="Generates dropdown options cleanly for Watsonx.",
     version="1.0.0"
+)
+
+# Enable CORS so Watsonx can communicate with Render seamlessly
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (POST, GET, etc.)
+    allow_headers=["*"],  # Allows all headers
 )
 
 class ComplaintOptions(str, Enum):
@@ -27,7 +37,9 @@ class TicketResponse(BaseModel):
     response_model=TicketResponse
 )
 async def create_ticket(payload: TicketPayload):
+    # This prints directly to your Render live console logs when a button is clicked!
     print(f"Option Selected: {payload.selected_complaint.value}")
+    
     return {
-        "success_message": f"**Ticket raised successfully for: {payload.selected_complaint.value}!**"
+        "success_message": f"System Fault: {payload.selected_complaint.value}. Details: User reported a {payload.selected_complaint.value.lower()}. Immediate investigation and remediation are recommended."
     }
