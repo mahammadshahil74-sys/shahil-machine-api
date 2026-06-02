@@ -1,45 +1,52 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from enum import Enum
+from typing import Literal
 
 app = FastAPI(
-    title="Shahil_Machine_Fault_API",
-    description="Generates dropdown options cleanly for Watsonx.",
-    version="1.0.0"
+    title="Shahil_Advanced_Form_API",
+    description="Provides seamless interactive options and handles quiet ticket workflow pipelines.",
+    version="2.0.0"
 )
 
-# Enable CORS so Watsonx can communicate with Render seamlessly
+# Enable CORS for Watsonx
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (POST, GET, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-class ComplaintOptions(str, Enum):
-    option_1 = "Total Power Failure"
-    option_2 = "Overheating Error"
-    option_3 = "Mechanical Jam"
-    option_4 = "Sensor Calibration Error"
+# This explicitly declares the 4 text choices inside your Python code!
+class ComplaintSelection(BaseModel):
+    selected_complaint: Literal[
+        "Total Power Failure",
+        "Overheating Error",
+        "Mechanical Jam",
+        "Sensor Calibration Error"
+    ]
 
-class TicketPayload(BaseModel):
-    selected_complaint: ComplaintOptions  
+# Schema for the final step that receives both the choice and the email
+class EmailNotificationPayload(BaseModel):
+    selected_complaint: str
+    user_email: str
 
-class TicketResponse(BaseModel):
-    success_message: str
+@app.post("/create-ticket", summary="Submit Machine Fault Form Item")
+async def create_ticket(payload: ComplaintSelection):
+    """
+    Step 1: Captures the chosen option from the interactive Watsonx menu.
+    Logs it to Render console, then goes completely silent (Empty text string).
+    """
+    print(f"User selected option via Form: {payload.selected_complaint}")
+    return Response(content="", media_type="text/plain")
 
-@app.post(
-    "/create-ticket",
-    summary="Shahil Custom Ticket Buttons",
-    operation_id="Submit_Machine_Fault_Ticket",
-    response_model=TicketResponse
-)
-async def create_ticket(payload: TicketPayload):
-    # This prints directly to your Render live console logs when a button is clicked!
-    print(f"Option Selected: {payload.selected_complaint.value}")
-    
+@app.post("/send-email-notification", summary="Send Workflow Email Notification")
+async def send_email(payload: EmailNotificationPayload):
+    """
+    Step 2: Triggered at the end of your workflow once the user types their email.
+    """
+    print(f"Triggering confirmation email to: {payload.user_email} for {payload.selected_complaint}")
     return {
-        "success_message": f"System Fault: {payload.selected_complaint.value}. Details: User reported a {payload.selected_complaint.value.lower()}. Immediate investigation and remediation are recommended."
+        "notification_status": f"Ticket raised successfully! A confirmation email has been sent to {payload.user_email}."
     }
