@@ -1,65 +1,46 @@
-from fastapi import FastAPI, Response, status
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
-import uvicorn
+import os  # <-- Add this import at the very top of your file
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-# 1. Initialize the FastAPI app matching your unique OpenAPI info block
-app = FastAPI(
-    title="Alpha Support Matrix Backend",
-    description="Live backend handling machine diagnostic selections and email routing",
-    version="1.0.0"
-)
+app = FastAPI()
 
-# 2. Enable wide-open CORS so IBM watsonx Orchestrate can securely connect
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def send_dispatch_email(user_email, complaint_type):
+    # Pulling credentials safely from the hosting environment
+    sender_email = os.environ.get("SENDER_EMAIL")
+    app_password = os.environ.get("GMAIL_APP_PASSWORD")
 
-# 3. Define structured Pydantic Data Models matching your tool inputs
-class SelectionModel(BaseModel):
-    selected_complaint: str
+    if not sender_email or not app_password:
+        print("Error: Email environment variables are missing!")
+        raise Exception("Configuration error")
 
-class DispatchModel(BaseModel):
-    selected_complaint: str
-    user_email: str
+    msg = MIMEMultipart()
+    msg['From'] = f"Industrial Support Assistant <{sender_email}>"
+    msg['To'] = user_email
+    msg['Subject'] = f"🚨 Dispatch Notification: Ticket Raised for {complaint_type}"
 
-# 4. Root Endpoint (For quick health checks to verify your Render server is up)
-@app.get("/")
-async def health_check():
-    return {"status": "Alpha Support Matrix Server is Online and Healthy"}
+    body = f"<h3>Industrial Support Dispatch</h3><p>A ticket has been raised for: <b>{complaint_type}</b></p>"
+    msg.attach(MIMEText(body, 'html'))
 
-# 5. STEP 1 ENDPOINT: Handles your clickable dropdown options cleanly
-@app.post("/select-fault", status_code=status.HTTP_200_OK)
-async def select_fault(payload: SelectionModel):
-    """
-    Receives the button option selection. Returns an empty plain text 
-    response so watsonx does not output messy JSON strings into the user chat.
-    """
-    print(f"[LOG - STEP 1] User selected structural fault: {payload.selected_complaint}")
-    
-    # Returning a completely clean text/plain response overrides the default JSON echo
-    return Response(content="", media_type="text/plain")
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, app_password)
+        server.sendmail(sender_email, user_email, msg.as_string())
+        server.quit()
+    except Exception as e:
+        print(f"SMTP Error: {e}")
+        raise Exception("Email failed to send")
 
-# 6. STEP 2 ENDPOINT: Receives the collective form data and sends notifications
-@app.post("/dispatch-ticket", status_code=status.HTTP_200_OK)
-async def dispatch_ticket(payload: DispatchModel):
-    """
-    Receives both the original complaint value and the user-entered email string,
-    firing them off together to execute your notification pipeline.
-    """
-    print(f"[LOG - STEP 2] Processing Ticket Dispatched!")
-    print(f"--> Complaint Category: {payload.selected_complaint}")
-    print(f"--> Target Destination User: {payload.user_email}")
-    
-    # This return payload maps cleanly to your final step's success message card variable
-    return {
-        "notification_status": f"Success! A diagnostic ticket for '{payload.selected_complaint}' has been recorded. A notification was sent to {payload.user_email}."
-    }
+@app.post("/submit-complaint")
+async def handle_complaint(data: dict):
+    email_entered = data.get("emailAddress") 
+    complaint = data.get("selectedComplaint", "Machinery Breakdown") 
 
-# Entry point for local debugging execution
-if __name__ == "__main__":
-    uvicorn.run("main.py:app", host="0.0.0.0", port=8000, reload=True)
+    try:
+        send_dispatch_email(email_entered, complaint)
+        return {"status": "success", "message": "Form processed and email dispatched!"}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error sending notification.")
