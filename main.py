@@ -1,7 +1,5 @@
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
 from fastapi import FastAPI, HTTPException
 from dotenv import load_dotenv  
 
@@ -10,31 +8,47 @@ load_dotenv()
 app = FastAPI()
 
 def send_dispatch_email(user_email, complaint_type):
+    # This grabs the email you saved on Render
     sender_email = os.environ.get("SENDER_EMAIL")
-    app_password = os.environ.get("GMAIL_APP_PASSWORD")
+    # This matches the new key name you just entered!
+    api_key = os.environ.get("SENDGRID_API_KEY")
 
-    if not sender_email or not app_password:
-        print("Error: Email environment variables are missing from Render!")
+    if not sender_email or not api_key:
+        print("Error: SendGrid API credentials are missing from Render!")
         raise Exception("Configuration error")
 
-    msg = MIMEMultipart()
-    msg['From'] = f"Industrial Support Assistant <{sender_email}>"
-    msg['To'] = user_email
-    msg['Subject'] = f"🚨 Dispatch Notification: Ticket Raised for {complaint_type}"
+    # Pure HTTPS web endpoint—Render cannot block this traffic
+    url = "https://api.sendgrid.com/v3/mail/send"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "personalizations": [{
+            "to": [{"email": user_email}]
+        }],
+        "from": {
+            "email": sender_email,
+            "name": "Industrial Support Assistant"
+        },
+        "subject": f"🚨 Dispatch Notification: Ticket Raised for {complaint_type}",
+        "content": [{
+            "type": "text/html",
+            "value": f"<h3>Industrial Support Dispatch</h3><p>A ticket has been raised for: <b>{complaint_type}</b></p>"
+        }]
+    }
 
-    body = f"<h3>Industrial Support Dispatch</h3><p>A ticket has been raised for: <b>{complaint_type}</b></p>"
-    msg.attach(MIMEText(body, 'html'))
-
-    # FIXED: Using direct SSL on Port 465 with an explicit 10-second timeout to prevent hanging
     try:
-        print("Attempting connection to secure Gmail SMTP server...")
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10)
-        server.login(sender_email, app_password)
-        server.sendmail(sender_email, user_email, msg.as_string())
-        server.quit()
-        print(f"Success: Dispatch email sent cleanly to {user_email}")
+        print("Attempting to send email via SendGrid Web API...")
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code not in [200, 201, 202]:
+            print(f"SendGrid API Error: {response.text}")
+            raise Exception(f"SendGrid rejected mail: {response.status_code}")
+        print(f"Success: Dispatch email sent cleanly via Web API to {user_email}")
     except Exception as e:
-        print(f"SMTP Connection Error: {e}")
+        print(f"Web API Delivery Error: {e}")
         raise Exception(f"Mail delivery service failed: {str(e)}")
 
 @app.post("/select-fault")
@@ -70,5 +84,4 @@ async def handle_complaint(data: dict):
             "message": "Form processed completely and dispatch email sent!"
         }
     except Exception as e:
-        # Returns a clean message back to watsonx instead of locking the UI
         raise HTTPException(status_code=500, detail=str(e))
