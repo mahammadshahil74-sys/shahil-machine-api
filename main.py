@@ -1,14 +1,16 @@
-import os  # <-- Add this import at the very top of your file
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv  
+
+# Load local environment variables if testing on your laptop
+load_dotenv() 
 
 app = FastAPI()
 
 def send_dispatch_email(user_email, complaint_type):
-    # Pulling credentials safely from the hosting environment
     sender_email = os.environ.get("SENDER_EMAIL")
     app_password = os.environ.get("GMAIL_APP_PASSWORD")
 
@@ -38,6 +40,9 @@ def send_dispatch_email(user_email, complaint_type):
 async def handle_complaint(data: dict):
     email_entered = data.get("emailAddress") 
     complaint = data.get("selectedComplaint", "Machinery Breakdown") 
+
+    if not email_entered:
+        raise HTTPException(status_code=400, detail="Missing email address.")
 
     try:
         send_dispatch_email(email_entered, complaint)
