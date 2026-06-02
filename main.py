@@ -8,16 +8,14 @@ load_dotenv()
 app = FastAPI()
 
 def send_dispatch_email(user_email, complaint_type):
-    # This grabs the email you saved on Render
     sender_email = os.environ.get("SENDER_EMAIL")
-    # This matches the new key name you just entered!
     api_key = os.environ.get("SENDGRID_API_KEY")
 
     if not sender_email or not api_key:
         print("Error: SendGrid API credentials are missing from Render!")
         raise Exception("Configuration error")
 
-    # Pure HTTPS web endpoint—Render cannot block this traffic
+    # Pure HTTPS web endpoint—Render never blocks this!
     url = "https://api.sendgrid.com/v3/mail/send"
     
     headers = {
