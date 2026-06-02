@@ -14,7 +14,7 @@ def send_dispatch_email(user_email, complaint_type):
     app_password = os.environ.get("GMAIL_APP_PASSWORD")
 
     if not sender_email or not app_password:
-        print("Error: Email environment variables are missing!")
+        print("Error: Email environment variables are missing from Render!")
         raise Exception("Configuration error")
 
     msg = MIMEMultipart()
@@ -31,24 +31,33 @@ def send_dispatch_email(user_email, complaint_type):
         server.login(sender_email, app_password)
         server.sendmail(sender_email, user_email, msg.as_string())
         server.quit()
+        print(f"Success: Dispatch email sent to {user_email}")
     except Exception as e:
         print(f"SMTP Error: {e}")
         raise Exception("Email failed to send")
 
-# --- BOTH ROUTES NOW REDIRECT HERE SO IT NEVER 404s ---
-
 @app.post("/select-fault")
 @app.post("/submit-complaint")
 async def handle_complaint(data: dict):
-    # Print incoming data to the logs so you can see it live
     print(f"Incoming Watsonx Data: {data}")
 
-    # Fallback checks to match any variations in your JSON setup keys
-    email_entered = data.get("emailAddress") or data.get("email")
-    complaint = data.get("selectedComplaint") or data.get("faultType") or "Machinery Breakdown"
+    # FIXED LINE: Check every single possible key format for the user email
+    email_entered = (
+        data.get("user_email") or 
+        data.get("emailAddress") or 
+        data.get("email")
+    )
+    
+    # FIXED LINE: Check every single possible key format for the complaint text
+    complaint = (
+        data.get("selected_complaint") or 
+        data.get("selectedComplaint") or 
+        data.get("faultType") or 
+        "Machinery Breakdown"
+    )
 
     if not email_entered:
-        # If watsonx hits it during an initial schema validation pass, don't crash
+        print("Warning: Received a request with no email address payload.")
         return {"status": "success", "message": "Endpoint active, awaiting data pass."}
 
     try:
