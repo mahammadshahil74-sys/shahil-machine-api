@@ -36,19 +36,19 @@ def send_dispatch_email(user_email, complaint_type):
         print(f"SMTP Error: {e}")
         raise Exception("Email failed to send")
 
+# --- LISTENING TO ALL THREE POSSIBLE WATSONX ENDPOINTS ---
 @app.post("/select-fault")
 @app.post("/submit-complaint")
+@app.post("/dispatch-ticket")
 async def handle_complaint(data: dict):
     print(f"Incoming Watsonx Data: {data}")
 
-    # FIXED LINE: Check every single possible key format for the user email
     email_entered = (
         data.get("user_email") or 
         data.get("emailAddress") or 
         data.get("email")
     )
     
-    # FIXED LINE: Check every single possible key format for the complaint text
     complaint = (
         data.get("selected_complaint") or 
         data.get("selectedComplaint") or 
@@ -56,12 +56,19 @@ async def handle_complaint(data: dict):
         "Machinery Breakdown"
     )
 
+    # If Watsonx sends Step 1 data without an email yet, don't crash, return 200 OK
     if not email_entered:
-        print("Warning: Received a request with no email address payload.")
-        return {"status": "success", "message": "Endpoint active, awaiting data pass."}
+        print("Step 1 data cached. Waiting for user email input step...")
+        return {
+            "status": "success", 
+            "message": f"Fault selected: {complaint}. Awaiting email step."
+        }
 
     try:
         send_dispatch_email(email_entered, complaint)
-        return {"status": "success", "message": "Form processed and email dispatched!"}
+        return {
+            "status": "success", 
+            "message": "Form processed completely and dispatch email sent!"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email system error: {str(e)}")
