@@ -5,7 +5,6 @@ from email.mime.multipart import MIMEMultipart
 from fastapi import FastAPI, HTTPException
 from dotenv import load_dotenv  
 
-# Load local environment variables if testing on your laptop
 load_dotenv() 
 
 app = FastAPI()
@@ -36,16 +35,24 @@ def send_dispatch_email(user_email, complaint_type):
         print(f"SMTP Error: {e}")
         raise Exception("Email failed to send")
 
+# --- BOTH ROUTES NOW REDIRECT HERE SO IT NEVER 404s ---
+
+@app.post("/select-fault")
 @app.post("/submit-complaint")
 async def handle_complaint(data: dict):
-    email_entered = data.get("emailAddress") 
-    complaint = data.get("selectedComplaint", "Machinery Breakdown") 
+    # Print incoming data to the logs so you can see it live
+    print(f"Incoming Watsonx Data: {data}")
+
+    # Fallback checks to match any variations in your JSON setup keys
+    email_entered = data.get("emailAddress") or data.get("email")
+    complaint = data.get("selectedComplaint") or data.get("faultType") or "Machinery Breakdown"
 
     if not email_entered:
-        raise HTTPException(status_code=400, detail="Missing email address.")
+        # If watsonx hits it during an initial schema validation pass, don't crash
+        return {"status": "success", "message": "Endpoint active, awaiting data pass."}
 
     try:
         send_dispatch_email(email_entered, complaint)
         return {"status": "success", "message": "Form processed and email dispatched!"}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal server error sending notification.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email system error: {str(e)}")
