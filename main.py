@@ -1,15 +1,12 @@
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Literal
 
 app = FastAPI(
-    title="Shahil_Advanced_Form_API",
-    description="Provides seamless interactive options and handles quiet ticket workflow pipelines.",
-    version="2.0.0"
+    title="Alpha_Support_Matrix_Backend",
+    version="1.0.0"
 )
 
-# Enable CORS for Watsonx
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,35 +15,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# This explicitly declares the 4 text choices inside your Python code!
-class ComplaintSelection(BaseModel):
-    selected_complaint: Literal[
-        "Total Power Failure",
-        "Overheating Error",
-        "Mechanical Jam",
-        "Sensor Calibration Error"
-    ]
+class SelectionModel(BaseModel):
+    selected_complaint: str
 
-# Schema for the final step that receives both the choice and the email
-class EmailNotificationPayload(BaseModel):
+class DispatchModel(BaseModel):
     selected_complaint: str
     user_email: str
 
-@app.post("/create-ticket", summary="Submit Machine Fault Form Item")
-async def create_ticket(payload: ComplaintSelection):
+@app.post("/select-fault")
+async def select_fault(payload: SelectionModel):
     """
-    Step 1: Captures the chosen option from the interactive Watsonx menu.
-    Logs it to Render console, then goes completely silent (Empty text string).
+    Step 1: Quietly logs the selected button option without sending chat text back.
     """
-    print(f"User selected option via Form: {payload.selected_complaint}")
+    print(f"Alpha Log - Fault Selection: {payload.selected_complaint}")
     return Response(content="", media_type="text/plain")
 
-@app.post("/send-email-notification", summary="Send Workflow Email Notification")
-async def send_email(payload: EmailNotificationPayload):
+@app.post("/dispatch-ticket")
+async def dispatch_ticket(payload: DispatchModel):
     """
-    Step 2: Triggered at the end of your workflow once the user types their email.
+    Step 2: Receives the user email from the canvas form and triggers confirmation message.
     """
-    print(f"Triggering confirmation email to: {payload.user_email} for {payload.selected_complaint}")
+    print(f"Alpha Log - Dispatched to: {payload.user_email}")
     return {
         "notification_status": f"Ticket raised successfully! A confirmation email has been sent to {payload.user_email}."
     }
