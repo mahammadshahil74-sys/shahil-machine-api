@@ -25,18 +25,18 @@ def send_dispatch_email(user_email, complaint_type):
     body = f"<h3>Industrial Support Dispatch</h3><p>A ticket has been raised for: <b>{complaint_type}</b></p>"
     msg.attach(MIMEText(body, 'html'))
 
+    # FIXED: Using direct SSL on Port 465 with an explicit 10-second timeout to prevent hanging
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
+        print("Attempting connection to secure Gmail SMTP server...")
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10)
         server.login(sender_email, app_password)
         server.sendmail(sender_email, user_email, msg.as_string())
         server.quit()
-        print(f"Success: Dispatch email sent to {user_email}")
+        print(f"Success: Dispatch email sent cleanly to {user_email}")
     except Exception as e:
-        print(f"SMTP Error: {e}")
-        raise Exception("Email failed to send")
+        print(f"SMTP Connection Error: {e}")
+        raise Exception(f"Mail delivery service failed: {str(e)}")
 
-# --- LISTENING TO ALL THREE POSSIBLE WATSONX ENDPOINTS ---
 @app.post("/select-fault")
 @app.post("/submit-complaint")
 @app.post("/dispatch-ticket")
@@ -56,7 +56,6 @@ async def handle_complaint(data: dict):
         "Machinery Breakdown"
     )
 
-    # If Watsonx sends Step 1 data without an email yet, don't crash, return 200 OK
     if not email_entered:
         print("Step 1 data cached. Waiting for user email input step...")
         return {
@@ -71,4 +70,5 @@ async def handle_complaint(data: dict):
             "message": "Form processed completely and dispatch email sent!"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Email system error: {str(e)}")
+        # Returns a clean message back to watsonx instead of locking the UI
+        raise HTTPException(status_code=500, detail=str(e))
